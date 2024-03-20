@@ -1,0 +1,11 @@
+---
+version: "3"
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: ./.docker/app/Dockerfile
+    # volumes:
+    #   - ./private/google-key.json:/private/google-key.json:ro
+    #   - ./private/db:/db

@@ -1,0 +1,12 @@
+.git
+.docker
+node_modules
+private
+.env
+README.md
+.dockerignore
+.gitignore
+compose.yaml
+compose.override.yaml
+docker-compose.yaml
+docker-compose.override.yaml
