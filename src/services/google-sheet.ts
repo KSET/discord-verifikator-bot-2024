@@ -88,11 +88,15 @@ export class GoogleSheetService {
   }
 
   public async updateEverybodySheetCache() {
-    Logger.info("Updating everybody sheet cache");
-    const rows = await this.everybodySheet.getRows<RawUserRow>();
-    Logger.info("Updated everybody sheet cache:", rows.length, "rows");
-    this.everybodySheetCache.rows = rows;
-    this.everybodySheetCache.lastUpdated = new Date();
+    try {
+      Logger.info("Updating everybody sheet cache");
+      const rows = await this.everybodySheet.getRows<RawUserRow>();
+      Logger.info("Updated everybody sheet cache:", rows.length, "rows");
+      this.everybodySheetCache.rows = rows;
+      this.everybodySheetCache.lastUpdated = new Date();
+    } catch (e) {
+      Logger.error("Error updating everybody sheet cache", e);
+    }
   }
 
   public async findUserByEmail(searchEmail: string) {
