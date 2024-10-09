@@ -2,6 +2,7 @@ import type { Client, OAuth2Guild, RoleCreateOptions } from "discord.js";
 
 import { Logger } from "~/logger";
 import type { GoogleSheetService } from "~/services/google-sheet";
+import type { UserService } from "~/services/user";
 
 export const ROLES = {
   Narančasti: {
@@ -13,6 +14,99 @@ export const ROLES = {
 } as Record<string, RoleCreateOptions & { id?: string }>;
 
 export type Roles = typeof ROLES;
+
+export async function updateUserRoles(
+  client: Client,
+  googleSheetService: GoogleSheetService,
+  userService: UserService,
+) {
+  Logger.info("Updating user roles");
+
+  Logger.debug("Fetching guilds from API");
+  const guilds = await client.guilds.fetch();
+  Logger.debug("Fetched guilds", guilds.size);
+  const allRoleIds = new Set(
+    Object.values(ROLES)
+      .map((x) => x.id)
+      .filter(Boolean),
+  );
+
+  for (const oauth2Guild of guilds.values()) {
+    Logger.debug(`Handling guild ${oauth2Guild.id} | ${oauth2Guild.name}`);
+    const guild = await oauth2Guild.fetch();
+    const members = await guild.members.fetch();
+
+    for (const guildMember of members.values()) {
+      const dbUser = userService.getUserByDiscordId(guildMember.id);
+      const userName = `${guildMember.user.username}#${guildMember.user.discriminator}`;
+      Logger.trace(`Handling user ${userName}`);
+
+      if (!dbUser) {
+        Logger.debug(`User ${userName} is not registered`);
+        continue;
+      }
+
+      const userRow = await googleSheetService.findUserByOib(dbUser.oib);
+
+      if (!userRow) {
+        Logger.error(
+          `User ${userName} is registered but not found in the Google Sheet`,
+        );
+
+        continue;
+      }
+
+      const memberShouldHaveRoleIds = [
+        ROLES[userRow["Matična sekcija"]!]?.id,
+        ROLES[userRow["Trenutna vrsta članstva"]!.replace(/a$/, "i")]?.id,
+      ].filter(Boolean);
+
+      Logger.debug("Updating user roles", {
+        user: dbUser,
+        userRoles: memberShouldHaveRoleIds,
+      });
+      {
+        try {
+          const memberCurrentRoleIds = Array.from(
+            guildMember.roles.cache.values(),
+          )
+            .map((x) => x.id)
+            .filter((x) => allRoleIds.has(x));
+
+          const rolesToRemove = memberCurrentRoleIds.filter(
+            (x) => !memberShouldHaveRoleIds.includes(x),
+          );
+          const rolesToAdd = memberShouldHaveRoleIds.filter(
+            (x) => !memberCurrentRoleIds.includes(x),
+          );
+
+          if (rolesToRemove.length > 0) {
+            Logger.debug(
+              `Removing old roles from user ${userName}`,
+              rolesToRemove,
+            );
+            await guildMember.roles.remove(
+              rolesToRemove,
+              "Updating user roles from Google Sheet",
+            );
+          }
+
+          if (rolesToAdd.length > 0) {
+            Logger.debug(`Adding new roles to user ${userName}`, rolesToAdd);
+            await guildMember.roles.add(
+              rolesToAdd,
+              "Updating user roles from Google Sheet",
+            );
+          }
+        } catch (e) {
+          Logger.error(`Failed to update roles for user ${userName}`, e);
+        }
+      }
+    }
+  }
+
+  Logger.info("Updated user roles");
+}
 
 export async function initRoles(
   client: Client,

@@ -9,7 +9,7 @@ import { UserService } from "~/services/user";
 import { VerificationService } from "~/services/verification";
 
 import { COMMANDS, initCommands, MODAL_ID_TO_COMMAND_NAME } from "./commands";
-import { initRoles } from "./roles";
+import { initRoles, updateUserRoles } from "./roles";
 
 export async function runDiscordBot() {
   initDb();
@@ -19,7 +19,12 @@ export async function runDiscordBot() {
   const googleSheetService = await GoogleSheetService.newFromEnv();
   setInterval(
     () => {
-      void googleSheetService.updateEverybodySheetCache();
+      void googleSheetService
+        .updateEverybodySheetCache()
+        .then(() => {
+          void updateUserRoles(client, googleSheetService, userService);
+        })
+        .catch();
     },
     10 * 60 * 1000,
   );
@@ -37,7 +42,7 @@ export async function runDiscordBot() {
     intents: [
       GatewayIntentBits.Guilds,
       // GatewayIntentBits.GuildMessages,
-      // GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildModeration,
     ],
   });
@@ -153,6 +158,7 @@ export async function runDiscordBot() {
   Logger.info("Logged in to Discord API", apiToken);
 
   await initRoles(client, googleSheetService);
+  await updateUserRoles(client, googleSheetService, userService);
   setInterval(
     () => {
       void initRoles(client, googleSheetService);
